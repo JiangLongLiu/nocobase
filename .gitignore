@@ -34,3 +34,6 @@ yarn--**
 v8-compile-cache-**
 vitest.config.mts.timestamp-*
 .github/copilot-instructions.md
+
+# Qoder AI 缓存和索引
+.qoder/
