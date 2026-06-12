@@ -1,0 +1,88 @@
+networks:
+  nocobase:
+    driver: bridge
+
+services:
+  postgres:
+    image: postgres:16
+    container_name: nocobase-postgres
+    restart: unless-stopped
+    networks:
+      - nocobase
+    ports:
+      - "15432:5432"
+    volumes:
+      - ./storage/db/postgres:/var/lib/postgresql/data
+    environment:
+      POSTGRES_DB: nocobase
+      POSTGRES_USER: nocobase
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8"
+      TZ: Asia/Shanghai
+    # 资源限制：0.5核CPU + 128MB内存
+    deploy:
+      resources:
+        limits:
+          cpus: "0.50"
+          memory: 128M
+        reservations:
+          cpus: "0.25"
+          memory: 64M
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nocobase"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # NocoBase 应用
+  nocobase:
+    image: nocobase/nocobase:latest
+    container_name: nocobase-app
+    restart: unless-stopped
+    networks:
+      - nocobase
+    ports:
+      - "18080:80"
+    volumes:
+      - ./storage:/app/nocobase/storage
+    environment:
+      APP_ENV: production
+      APP_KEY: ${APP_KEY}
+      ENCRYPTION_FIELD_KEY: ${ENCRYPTION_FIELD_KEY}
+      API_BASE_PATH: /api/
+      DB_DIALECT: postgres
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_DATABASE: nocobase
+      DB_USER: nocobase
+      DB_PASSWORD: ${DB_PASSWORD}
+      INIT_LANG: zh-CN
+      INIT_ROOT_EMAIL: admin@nocobase.com
+      INIT_ROOT_PASSWORD: ${INIT_ROOT_PASSWORD}
+      INIT_ROOT_NICKNAME: 超级管理员
+      INIT_ROOT_USERNAME: admin
+      LOGGER_TRANSPORT: console
+      LOGGER_LEVEL: info
+      CACHE_DEFAULT_STORE: memory
+      TZ: Asia/Shanghai
+      # 限制 Node.js 堆内存为 384MB，避免 OOM
+      NODE_OPTIONS: "--max-old-space-size=384"
+    # 资源限制：1核CPU + 512MB内存
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+        reservations:
+          cpus: "0.50"
+          memory: 256M
+    depends_on:
+      postgres:
+        condition: service_healthy
+    init: true
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"const h=require('http');h.get('http://localhost/api/app:getLang',r=>{process.exit(r.statusCode===200?0:1)}).on('error',()=>process.exit(1))\""]
+      interval: 30s
+      timeout: 15s
+      retries: 5
+      start_period: 180s
